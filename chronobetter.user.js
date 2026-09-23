@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         ChronoGestor - Temps restant
 // @namespace    three
-// @version      11
+// @version      12
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        GM_info
-// @updateURL    https://raw.githubusercontent.com/ThreeWasTaken/Chronobetter/master/chronobetter.user.js
-// @downloadURL  https://raw.githubusercontent.com/ThreeWasTaken/Chronobetter/master/chronobetter.user.js
+// @updateURL    https://github.com/ThreeWasTaken/Chronobetter/raw/refs/heads/master/chronobetter.user.js
+// @downloadURL  https://github.com/ThreeWasTaken/Chronobetter/raw/refs/heads/master/chronobetter.user.js
 // ==/UserScript==
 
 (function() {
@@ -53,7 +53,7 @@
     'https://i.imgur.com/5TRCDi6.png';
 
   // ============================================================
-  // FOND GÉNÉRAL CHRONOGESTOR
+  // FOND GÉNÉRAL CHRONOGESTOR 2
   // ============================================================
 
   var SKIN_STORAGE_KEY =
