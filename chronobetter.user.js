@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChronoGestor - Temps restant
 // @namespace    three
-// @version      7
+// @version      8
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        none
@@ -962,18 +962,14 @@
             }
 
 
-            #three-worktime-close {
-
-                border: 0;
-
-                background: transparent;
-
-                color: white;
-
-                font-size: 20px;
-
-                cursor: pointer;
-            }
+			#three-worktime-close,
+			#three-update {
+				border: 0;
+				background: transparent;
+				color: white;
+				font-size: 20px;
+				cursor: pointer;
+			}
 
 
             /* ==================================================
@@ -1838,20 +1834,32 @@
 
     widget.innerHTML = `
 
-            <div id="three-worktime-header">
+			<div id="three-worktime-header">
 
-                <strong>
-                    ⏱ Temps de travail
-                </strong>
+			<strong>
+				⏱ Chronobetter
+				<span id="three-version">
+					v${GM_info.script.version}
+				</span>
+			</strong>
 
-                <button
-                    id="three-worktime-close"
-                    title="Fermer"
-                >
-                    ×
-                </button>
+				<div>
+					<button
+						id="three-update"
+						title="Mettre à jour Chronobetter"
+					>
+						↻
+					</button>
 
-            </div>
+					<button
+						id="three-worktime-close"
+						title="Fermer"
+					>
+						×
+					</button>
+				</div>
+
+			</div>
 
 
             <div id="three-worktime-body">
@@ -2168,6 +2176,18 @@
     document.body.appendChild(
       widget
     );
+
+	document
+	  .getElementById('three-update')
+	  .addEventListener(
+		'click',
+		function() {
+		  window.open(
+			'https://raw.githubusercontent.com/ThreeWasTaken/Chronobetter/master/chronobetter.user.js',
+			'_blank'
+		  );
+		}
+	  );
 
     // ========================================================
     // SKIN
