@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         ChronoGestor - Temps restant
 // @namespace    three
-// @version      2.5
+// @version      7
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        none
+// @updateURL    https://raw.githubusercontent.com/ThreeWasTaken/Chronobetter/master/chronobetter.user.js
+// @downloadURL  https://raw.githubusercontent.com/ThreeWasTaken/Chronobetter/master/chronobetter.user.js
 // ==/UserScript==
 
 (function() {
