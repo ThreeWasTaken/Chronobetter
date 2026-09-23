@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChronoGestor - Temps restant
 // @namespace    three
-// @version      10
+// @version      11
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        GM_info
@@ -1837,7 +1837,7 @@
 			<div id="three-worktime-header">
 
 			<strong>
-				⏱ Chronobetter poi
+				⏱ Chronobetter
 				<span id="three-version">
 					v${GM_info.script.version}
 				</span>
