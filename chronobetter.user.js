@@ -2183,7 +2183,7 @@
 		'click',
 		function() {
 		  window.open(
-			'https://github.com/ThreeWasTaken/Chronobetter/raw/refs/heads/master/chronobetter.user.js',
+			'https://github.com/ThreeWasTaken/Chronobetter/raw/refs/heads/master/chronobetter.user.js?v=' + Date.now(),
 			'_blank'
 		  );
 		}
