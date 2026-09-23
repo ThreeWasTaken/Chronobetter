@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         ChronoGestor - Temps restant
 // @namespace    three
-// @version      8
+// @version      10
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
-// @grant        none
+// @grant        GM_info
 // @updateURL    https://raw.githubusercontent.com/ThreeWasTaken/Chronobetter/master/chronobetter.user.js
 // @downloadURL  https://raw.githubusercontent.com/ThreeWasTaken/Chronobetter/master/chronobetter.user.js
 // ==/UserScript==
@@ -1837,7 +1837,7 @@
 			<div id="three-worktime-header">
 
 			<strong>
-				⏱ Chronobetter
+				⏱ Chronobetter poi
 				<span id="three-version">
 					v${GM_info.script.version}
 				</span>
@@ -2183,7 +2183,7 @@
 		'click',
 		function() {
 		  window.open(
-			'https://raw.githubusercontent.com/ThreeWasTaken/Chronobetter/master/chronobetter.user.js',
+			'https://github.com/ThreeWasTaken/Chronobetter/raw/refs/heads/master/chronobetter.user.js',
 			'_blank'
 		  );
 		}
