@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChronoGestor - Temps restant
 // @namespace    three
-// @version      13
+// @version      15
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        GM_info
@@ -1391,45 +1391,51 @@
 
 
             #three-buttons button {
-
                 flex: 1;
 
-                padding: 6px;
-
-                cursor: pointer;
-
-                background:
-                    rgba(
-                        245,
-                        245,
-                        245,
-                        .90
-                    );
+                height: 30px;
+                padding: 0 12px;
 
                 border:
                     1px solid
-                    rgba(
-                        70,
-                        90,
-                        110,
-                        .65
-                    );
+                    rgba(30, 80, 120, .35);
 
-                border-radius: 4px;
-
-                color: #111;
-            }
-
-
-            #three-buttons button:hover {
+                border-radius: 15px;
 
                 background:
-                    rgba(
-                        255,
-                        255,
-                        255,
-                        .98
-                    );
+                    rgba(255, 255, 255, .78);
+
+                color: #23445f;
+
+                font-size: 11px;
+                font-weight: 600;
+
+                cursor: pointer;
+
+                box-shadow:
+                    0 2px 5px rgba(0, 0, 0, .12),
+                    inset 0 1px 0 rgba(255, 255, 255, .8);
+
+                transition:
+                    background .15s,
+                    transform .08s,
+                    box-shadow .15s;
+            }
+
+            #three-buttons button:hover {
+                background:
+                    rgba(255, 255, 255, .96);
+
+                box-shadow:
+                    0 3px 7px rgba(0, 0, 0, .16),
+                    inset 0 1px 0 white;
+            }
+
+            #three-buttons button:active {
+                transform: translateY(1px);
+
+                box-shadow:
+                    0 1px 2px rgba(0, 0, 0, .15);
             }
 
 
@@ -1513,6 +1519,23 @@
                         rgba(255,255,255,.98),
                     0 0 6px
                         rgba(255,255,255,.80);
+            }
+
+
+            #three-estimated-balance {
+                margin-top: 8px;
+                text-align: center;
+                font-size: 11px;
+                font-weight: 500;
+                color: #34495e;
+                text-shadow:
+                    0 1px 2px white,
+                    0 0 4px white;
+            }
+
+            #three-estimated-balance-value {
+                margin-left: 4px;
+                font-weight: bold;
             }
 
 
@@ -2002,29 +2025,23 @@
 
                     </div>
 
-
                     <div id="three-buttons">
 
                         <button
                             id="three-minus"
+                            title="Retirer 1 minute"
                         >
-                            − 1 min
-                        </button>
-
-                        <button
-                            id="three-goal-button"
-                        >
-                            7h48
+                            ◀&nbsp; −1 min
                         </button>
 
                         <button
                             id="three-plus"
+                            title="Ajouter 1 minute"
                         >
-                            + 1 min
+                            +1 min &nbsp;▶
                         </button>
 
                     </div>
-
 
                     <div id="three-results">
 
@@ -2064,6 +2081,12 @@
                         </div>
 
 
+                    </div>
+
+
+                    <div id="three-estimated-balance">
+                        Cumul estimé
+                        <span id="three-estimated-balance-value">--:--</span>
                     </div>
 
 
@@ -2258,6 +2281,19 @@
       update();
     }
 
+    marker.style.cursor = 'pointer';
+
+    marker.addEventListener(
+      'click',
+      function() {
+        var goal = getGoalDeparture();
+
+        if (goal !== null) {
+          moveSliderTo(goal);
+        }
+      }
+    );
+
     legalMarker.addEventListener(
       'click',
       function() {
@@ -2275,6 +2311,12 @@
         );
       }
     );
+
+    var estimatedBalance =
+      document.getElementById(
+        'three-estimated-balance-value'
+      );
+
 
     var countdown =
       document.getElementById(
@@ -2801,6 +2843,44 @@
           ' au-delà de l’objectif';
       }
 
+      var previousBalance =
+        readPreviousDayBalance();
+
+      if (previousBalance) {
+
+        var estimatedMinutes =
+          previousBalance.minutes +
+          difference;
+
+        var estimatedPrefix =
+          estimatedMinutes > 0
+            ? '+'
+            : estimatedMinutes < 0
+              ? '-'
+              : '';
+
+        estimatedBalance.textContent =
+          estimatedPrefix +
+          formatDuration(
+            Math.abs(estimatedMinutes)
+          );
+
+        estimatedBalance.style.color =
+          estimatedMinutes > 0
+            ? '#159447'
+            : estimatedMinutes < 0
+              ? '#d46b00'
+              : '#34495e';
+
+      } else {
+
+        estimatedBalance.textContent =
+          '--:--';
+
+        estimatedBalance.style.color =
+          '#34495e';
+      }
+
       updateCountdown();
       updateBalanceMarker();
     }
@@ -3159,42 +3239,6 @@
               slider.value,
               10
             ) + 1
-          );
-
-        update();
-      };
-
-    // ========================================================
-    // BOUTON 7H48
-    // ========================================================
-
-    document
-      .getElementById(
-        'three-goal-button'
-      )
-      .onclick =
-      function() {
-
-        var goal =
-          getGoalDeparture();
-
-        if (goal === null) {
-          return;
-        }
-
-        slider.value =
-          Math.max(
-            parseInt(
-              slider.min,
-              10
-            ),
-            Math.min(
-              parseInt(
-                slider.max,
-                10
-              ),
-              goal
-            )
           );
 
         update();
