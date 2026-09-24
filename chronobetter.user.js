@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChronoGestor - Temps restant
 // @namespace    three
-// @version      12
+// @version      13
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        GM_info
@@ -1201,8 +1201,6 @@
 
                 text-align: center;
 
-                pointer-events: none;
-
                 z-index: 3;
 
                 text-shadow:
@@ -1236,8 +1234,6 @@
                     translateX(-1px);
 
                 z-index: 2;
-
-                pointer-events: none;
             }
 
 
@@ -1373,6 +1369,12 @@
                 font-size: 10px;
             }
 
+            #three-legal-marker,
+            #three-latest-marker,
+            #three-balance-marker {
+                cursor: pointer;
+                pointer-events: auto;
+            }
 
             /* ==================================================
              * BOUTONS
@@ -2251,6 +2253,29 @@
         'three-balance-marker'
       );
 
+    function moveSliderTo(minutes) {
+      slider.value = minutes;
+      update();
+    }
+
+    legalMarker.addEventListener(
+      'click',
+      function() {
+        moveSliderTo(
+          EARLIEST_SIMPLE_DEPARTURE
+        );
+      }
+    );
+
+    latestMarker.addEventListener(
+      'click',
+      function() {
+        moveSliderTo(
+          LATEST_DEPARTURE
+        );
+      }
+    );
+
     var countdown =
       document.getElementById(
         'three-countdown'
@@ -2504,9 +2529,27 @@
         label
       );
 
+      balanceMarker.dataset.minutes =
+        balanceDeparture;
+
       balanceMarker.setAttribute(
         'data-time',
         formatClock(balanceDeparture)
+      );
+
+      balanceMarker.addEventListener(
+        'click',
+        function() {
+          var minutes =
+            parseInt(
+              balanceMarker.dataset.minutes,
+              10
+            );
+
+          if (!isNaN(minutes)) {
+            moveSliderTo(minutes);
+          }
+        }
       );
 
       if (limited) {
@@ -2848,6 +2891,15 @@
           pad(minutes) +
           ':' +
           pad(seconds);
+
+      window.top.document.title =
+        '⏱ ' +
+        pad(hours) +
+        ':' +
+        pad(minutes) +
+        ':' +
+        pad(seconds) +
+        ' — Chronobetter';
 
         return;
       }
