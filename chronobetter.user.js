@@ -1719,7 +1719,7 @@
                 position: absolute;
 
                 left: -4px;
-                bottom: 0;
+                bottom: 8;
 
                 width: 67px;
                 height: 62px;
@@ -1737,7 +1737,7 @@
                 position: absolute;
 
                 right: -3px;
-                bottom: 0;
+                bottom: 8;
 
                 width: 63px;
                 height: 62px;
@@ -1844,13 +1844,6 @@
 			</strong>
 
 				<div>
-					<button
-						id="three-update"
-						title="Mettre à jour Chronobetter"
-					>
-						↻
-					</button>
-
 					<button
 						id="three-worktime-close"
 						title="Fermer"
@@ -2176,18 +2169,6 @@
     document.body.appendChild(
       widget
     );
-
-	document
-	  .getElementById('three-update')
-	  .addEventListener(
-		'click',
-		function() {
-		  window.open(
-			'https://github.com/ThreeWasTaken/Chronobetter/raw/refs/heads/master/chronobetter.user.js?v=' + Date.now(),
-			'_blank'
-		  );
-		}
-	  );
 
     // ========================================================
     // SKIN
@@ -2684,6 +2665,22 @@
         formatClock(
           goal
         );
+
+      var isOutOfBounds =
+        total > 9 * 60 ||
+        departureMinutes > LATEST_DEPARTURE ||
+        departureMinutes < EARLIEST_SIMPLE_DEPARTURE;
+
+      var warningColor =
+        isOutOfBounds
+          ? '#d00000'
+          : '#111';
+
+      totalDisplay.style.color =
+        warningColor;
+
+      departureTime.style.color =
+        warningColor;
 
       // ----------------------------------------------------
       // REPÈRE BLEU 7H48
