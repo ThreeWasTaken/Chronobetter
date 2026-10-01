@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ChronoGestor - Temps restant
 // @namespace    three
-// @version      16
+// @version      17
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        GM_info
@@ -223,6 +223,44 @@
                     opacity .15s;
             }
 
+            #three-manual-balance-zone {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                margin-left: 5px;
+            }
+
+            #three-manual-balance-input {
+                width: 68px;
+                padding: 3px 5px;
+
+                border: 1px solid #9ab0c2;
+                border-radius: 5px;
+
+                background: rgba(255,255,255,.9);
+
+                color: #34495e;
+                font-size: 11px;
+                text-align: center;
+            }
+
+            #three-manual-balance-save {
+                padding: 3px 7px;
+
+                border: 0;
+                border-radius: 5px;
+
+                background: #159447;
+                color: white;
+
+                font-size: 12px;
+                cursor: pointer;
+            }
+
+            #three-manual-balance-save:hover {
+                background: #107535;
+            }
+
             #three-skin-switch:hover {
                 opacity: 1;
             }
@@ -420,7 +458,7 @@
 
   var match =
     value.match(
-      /^(-)?(\d+)h(\d+)m$/
+      /^(-)?(\d+)h(\d+)m?$/
     );
 
   if (!match) {
@@ -584,6 +622,46 @@
     };
   }
 
+  var manualPreviousBalance = null;
+
+  var MANUAL_BALANCE_KEY =
+    'chronobetter-manual-balance-' +
+    getTodayKey();
+
+  function getPreviousDayBalance() {
+
+    var automaticBalance =
+      readPreviousDayBalance();
+
+    // L'automatique est toujours prioritaire.
+    if (automaticBalance !== null) {
+      return automaticBalance;
+    }
+
+    // Récupération de la saisie du jour.
+    if (manualPreviousBalance === null) {
+
+      var saved =
+        localStorage.getItem(
+          MANUAL_BALANCE_KEY
+        );
+
+      if (saved !== null) {
+        manualPreviousBalance =
+          Number(saved);
+      }
+    }
+
+    if (manualPreviousBalance !== null) {
+      return {
+        minutes: manualPreviousBalance,
+        rawValue: 'manuel'
+      };
+    }
+
+    return null;
+  }
+
   function getTodayKey() {
 
     var now =
@@ -616,7 +694,7 @@
   // LECTURE DES POINTAGES
   // ============================================================
 
-  function readPunches() {
+    function readPunches() {
 
     var key =
       getTodayKey();
@@ -635,12 +713,14 @@
     var punches = [];
 
     for (
-      var i = 0; i < inputs.length; i++
+      var i = 0;
+      i < inputs.length;
+      i++
     ) {
 
       var name =
         inputs[i]
-        .getAttribute('name');
+          .getAttribute('name');
 
       var value =
         inputs[i].value;
@@ -671,13 +751,59 @@
       });
     }
 
+    /*
+     * Remet les pointages
+     * dans leur ordre réel.
+     */
     punches.sort(
       function(a, b) {
         return a.index - b.index;
       }
     );
 
-    return punches;
+    /*
+     * La badgeuse peut parfois
+     * enregistrer deux fois
+     * exactement le même pointage.
+     *
+     * 08:59
+     * 08:59
+     *
+     * On conserve le premier et
+     * ignore le doublon.
+     */
+    var cleanedPunches = [];
+
+    for (
+      var j = 0;
+      j < punches.length;
+      j++
+    ) {
+
+      var punch =
+        punches[j];
+
+      var previousPunch =
+        cleanedPunches.length
+          ? cleanedPunches[
+              cleanedPunches.length - 1
+            ]
+          : null;
+
+      if (
+        previousPunch &&
+        previousPunch.minutes ===
+          punch.minutes
+      ) {
+        continue;
+      }
+
+      cleanedPunches.push(
+        punch
+      );
+    }
+
+    return cleanedPunches;
   }
 
   // ============================================================
@@ -2085,8 +2211,33 @@
 
 
                     <div id="three-estimated-balance">
+
                         Cumul estimé
-                        <span id="three-estimated-balance-value">--:--</span>
+
+                        <span id="three-estimated-balance-value">
+                            --:--
+                        </span>
+
+                        <span
+                            id="three-manual-balance-zone"
+                            style="display:none"
+                        >
+                            <input
+                                id="three-manual-balance-input"
+                                type="text"
+                                placeholder="Ex : -0h31m"
+                                title="Cumul de la veille"
+                            >
+
+                            <button
+                                id="three-manual-balance-save"
+                                type="button"
+                                title="Valider le cumul"
+                            >
+                                ✓
+                            </button>
+                        </span>
+
                     </div>
 
 
@@ -2226,6 +2377,19 @@
         'three-departure-slider'
       );
 
+    var SLIDER_STORAGE_KEY =
+      'chronobetter-slider-' +
+      getTodayKey();
+
+    function saveSliderPosition() {
+
+      localStorage.setItem(
+        SLIDER_STORAGE_KEY,
+        slider.value
+      );
+    }
+
+
     var departureTime =
       document.getElementById(
         'three-departure-time'
@@ -2316,6 +2480,74 @@
       document.getElementById(
         'three-estimated-balance-value'
       );
+
+    var manualBalanceZone =
+      document.getElementById(
+        'three-manual-balance-zone'
+      );
+
+    var manualBalanceInput =
+      document.getElementById(
+        'three-manual-balance-input'
+      );
+
+    var manualBalanceSave =
+      document.getElementById(
+        'three-manual-balance-save'
+      );
+
+    function saveManualBalance() {
+
+      /*
+       * Si ChronoGestor possède finalement
+       * une vraie valeur, on refuse la saisie.
+       */
+      if (readPreviousDayBalance() !== null) {
+        return;
+      }
+
+      var value =
+        manualBalanceInput.value.trim();
+
+      var minutes =
+        parseDebitCredit(value);
+
+      if (minutes === null) {
+
+        manualBalanceInput.style.borderColor =
+          '#d00000';
+
+        return;
+      }
+
+      manualPreviousBalance =
+        minutes;
+
+      localStorage.setItem(
+        MANUAL_BALANCE_KEY,
+        String(minutes)
+      );
+
+      manualBalanceInput.style.borderColor =
+        '#9ab0c2';
+
+      update();
+    }
+
+    manualBalanceSave.addEventListener(
+      'click',
+      saveManualBalance
+    );
+
+    manualBalanceInput.addEventListener(
+      'keydown',
+      function(event) {
+
+        if (event.key === 'Enter') {
+          saveManualBalance();
+        }
+      }
+    );
 
 
     var countdown =
@@ -2409,7 +2641,7 @@
     function updateBalanceMarker() {
 
       var balance =
-        readPreviousDayBalance();
+        getPreviousDayBalance();
 
       var goal =
         getGoalDeparture();
@@ -2668,6 +2900,8 @@
 
     function update() {
 
+      saveSliderPosition();
+
       if (!resume.value) {
 
         calculation.style.display =
@@ -2843,8 +3077,21 @@
           ' au-delà de l’objectif';
       }
 
-      var previousBalance =
+      var automaticBalance =
         readPreviousDayBalance();
+
+      var previousBalance =
+        getPreviousDayBalance();
+
+      /*
+       * La saisie manuelle est disponible
+       * uniquement si ChronoGestor ne fournit
+       * aucun cumul pour la veille.
+       */
+      manualBalanceZone.style.display =
+        automaticBalance === null
+          ? 'inline-flex'
+          : 'none';
 
       if (previousBalance) {
 
@@ -3153,7 +3400,32 @@
     // POSITION INITIALE = OBJECTIF
     // ========================================================
 
-    if (resume.value) {
+    var savedSliderPosition =
+      localStorage.getItem(
+        SLIDER_STORAGE_KEY
+      );
+
+    if (savedSliderPosition !== null) {
+
+      var savedMinutes =
+        parseInt(
+          savedSliderPosition,
+          10
+        );
+
+      if (
+        !isNaN(savedMinutes) &&
+        savedMinutes >=
+          parseInt(slider.min, 10) &&
+        savedMinutes <=
+          parseInt(slider.max, 10)
+      ) {
+
+        slider.value =
+          savedMinutes;
+      }
+
+    } else if (resume.value) {
 
       var initialGoal =
         getGoalDeparture();
