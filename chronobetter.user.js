@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chronobetter - Temps restant
 // @namespace    three
-// @version      18
+// @version      19
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        GM_info
@@ -590,17 +590,17 @@
     }
 
 
-    var cells =
+    var balanceCells =
       balanceRow.children;
 
 
-    if (!cells[previousColumn]) {
+    if (!balanceCells[previousColumn]) {
       return null;
     }
 
 
     var rawValue =
-      cells[previousColumn]
+      balanceCells[previousColumn]
         .textContent
         .trim();
 
@@ -1404,6 +1404,57 @@
       lunchNotTakenYet: lunchNotTakenYet
     };
   }
+
+  // ============================================================
+  // KEEP-ALIVE CHRONOGESTOR
+  // ============================================================
+
+  /*
+   * Entretient silencieusement la session ChronoGestor.
+   *
+   * Le fetch charge la page côté HTTP mais ne remplace pas
+   * la page actuellement affichée dans la frame.
+   */
+  function keepChronoGestorAlive() {
+
+    var today =
+      formatDateDisplay(
+        new Date()
+      );
+
+    fetch(
+      '/salaries/planning/pointages?&jour_sel=' +
+        encodeURIComponent(today),
+      {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store'
+      }
+    ).catch(
+      function() {
+        /*
+         * Volontairement silencieux :
+         * un échec du keep-alive ne doit jamais
+         * perturber Chronobetter.
+         */
+      }
+    );
+  }
+
+
+  /*
+   * Pas de requête immédiate :
+   * le chargement courant vient déjà d'utiliser
+   * la session.
+   *
+   * Puis un ping toutes les 2 minutes,
+   * y compris lorsque l'onglet est en arrière-plan.
+   */
+  setInterval(
+    keepChronoGestorAlive,
+    2 * 60 * 1000
+  );
+
 
   // ============================================================
   // ATTENDRE LE TABLEAU
