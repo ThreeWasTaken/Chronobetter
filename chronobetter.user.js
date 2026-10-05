@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         ChronoGestor - Temps restant
+// @name         Chronobetter - Temps restant
 // @namespace    three
-// @version      17
+// @version      18
 // @description  Calcul automatique du temps de travail depuis ChronoGestor
 // @match        http://55.70.208.15:81/salaries/*
 // @grant        GM_info
@@ -47,7 +47,7 @@
     'https://i.imgur.com/SXTzY0d.png';
 
   var WALKER_IMAGE_URL =
-    'https://i.imgur.com/PGMuPPQ.png';
+    'https://i.imgur.com/TR4nDOB.gif';
 
   var HOME_IMAGE_URL =
     'https://i.imgur.com/5TRCDi6.png';
@@ -628,18 +628,444 @@
     'chronobetter-manual-balance-' +
     getTodayKey();
 
+
+  // ============================================================
+  // CUMUL SEMAINE PRÉCÉDENTE
+  // ============================================================
+
+  function formatDateKey(date) {
+    return (
+      pad(date.getDate()) +
+      '_' +
+      pad(date.getMonth() + 1) +
+      '_' +
+      date.getFullYear()
+    );
+  }
+
+
+  function formatDateDisplay(date) {
+    return (
+      pad(date.getDate()) +
+      '/' +
+      pad(date.getMonth() + 1) +
+      '/' +
+      date.getFullYear()
+    );
+  }
+
+
+  function getPreviousWeekInfo() {
+
+    var today =
+      new Date();
+
+    var day =
+      today.getDay();
+
+    var distanceFromMonday =
+      day === 0
+        ? 6
+        : day - 1;
+
+    var currentMonday =
+      new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() -
+        distanceFromMonday
+      );
+
+    currentMonday.setHours(
+      12, 0, 0, 0
+    );
+
+    var previousMonday =
+      new Date(currentMonday);
+
+    previousMonday.setDate(
+      previousMonday.getDate() - 7
+    );
+
+    var previousSunday =
+      new Date(currentMonday);
+
+    previousSunday.setDate(
+      previousSunday.getDate() - 1
+    );
+
+    return {
+      monday: previousMonday,
+      sunday: previousSunday,
+
+      key:
+        'chronobetter-week-balance-' +
+        formatDateKey(previousSunday)
+    };
+  }
+
+
+  function readStoredPreviousWeekBalance() {
+
+    var info =
+      getPreviousWeekInfo();
+
+    var raw =
+      sessionStorage.getItem(
+        info.key
+      );
+
+    if (!raw) {
+      return null;
+    }
+
+    try {
+
+      var stored =
+        JSON.parse(raw);
+
+      if (
+        typeof stored.minutes !==
+        'number'
+      ) {
+        return null;
+      }
+
+      return {
+        minutes: stored.minutes,
+        rawValue: stored.rawValue,
+        source: 'session',
+        date: stored.date
+      };
+
+    } catch (e) {
+
+      return null;
+    }
+  }
+
+
+  function showBalanceLoadedToast(
+    date,
+    minutes
+  ) {
+
+    var doc;
+
+    try {
+      doc = window.top.document;
+    } catch (e) {
+      doc = document;
+    }
+
+    if (
+      doc.getElementById(
+        'three-balance-loaded-toast'
+      )
+    ) {
+      return;
+    }
+
+    var toast =
+      doc.createElement('div');
+
+    toast.id =
+      'three-balance-loaded-toast';
+
+    var prefix =
+      minutes > 0
+        ? '+'
+        : minutes < 0
+          ? '-'
+          : '';
+
+    toast.textContent =
+      '✓ Cumul du ' +
+      date +
+      ' chargé : ' +
+      prefix +
+      formatDuration(
+        Math.abs(minutes)
+      );
+
+    toast.style.cssText =
+      'position:fixed;' +
+      'top:14px;' +
+      'left:50%;' +
+      'transform:translateX(-50%);' +
+      'z-index:2147483647;' +
+      'padding:8px 14px;' +
+      'border-radius:8px;' +
+      'background:rgba(21,148,71,.94);' +
+      'color:white;' +
+      'font:600 12px Arial,sans-serif;' +
+      'box-shadow:0 3px 12px rgba(0,0,0,.22);' +
+      'pointer-events:none;' +
+      'opacity:0;' +
+      'transition:opacity .18s ease;';
+
+    doc.body.appendChild(
+      toast
+    );
+
+    requestAnimationFrame(
+      function() {
+        toast.style.opacity = '1';
+      }
+    );
+
+    setTimeout(
+      function() {
+        toast.style.opacity = '0';
+
+        setTimeout(
+          function() {
+            toast.remove();
+          },
+          200
+        );
+      },
+      1800
+    );
+  }
+
+
+  function capturePreviousWeekBalance(
+    notify
+  ) {
+
+    var chronoWindow;
+
+    /*
+     * Si le userscript tourne directement
+     * dans la frame du synoptique, on utilise
+     * cette fenêtre.
+     *
+     * Sinon on tente la frame "droite".
+     */
+    if (
+      window.tab &&
+      window.tabResultatsJour
+    ) {
+
+      chronoWindow =
+        window;
+
+    } else {
+
+      try {
+
+        chronoWindow =
+          window.top.frames["droite"];
+
+      } catch (e) {
+
+        return false;
+      }
+    }
+
+    if (
+      !chronoWindow ||
+      !chronoWindow.tab ||
+      !chronoWindow.tabResultatsJour
+    ) {
+      return false;
+    }
+
+    var info =
+      getPreviousWeekInfo();
+
+    var expectedMonday =
+      formatDateDisplay(
+        info.monday
+      );
+
+    /*
+     * Sécurité :
+     * on ne capture QUE la semaine précédente
+     * attendue.
+     */
+    if (
+      !chronoWindow.tab[0] ||
+      chronoWindow.tab[0][0] !==
+        expectedMonday
+    ) {
+      return false;
+    }
+
+    /*
+     * Recherche du dernier cumul valide
+     * en remontant depuis la fin de semaine.
+     */
+    for (
+      var dayIndex =
+        chronoWindow.tabResultatsJour.length - 1;
+      dayIndex >= 0;
+      dayIndex--
+    ) {
+
+      var results =
+        chronoWindow
+          .tabResultatsJour[
+            dayIndex
+          ];
+
+      if (!results) {
+        continue;
+      }
+
+      var date =
+        chronoWindow.tab[dayIndex] &&
+        chronoWindow.tab[dayIndex][0];
+
+      if (!date) {
+        continue;
+      }
+
+      for (
+        var resultIndex =
+          results.length - 1;
+        resultIndex >= 0;
+        resultIndex--
+      ) {
+
+        var result =
+          results[resultIndex];
+
+        if (
+          !result ||
+          result[0] !==
+            'Débit Crédit Cumulé'
+        ) {
+          continue;
+        }
+
+        var minutes =
+          parseDebitCredit(
+            result[1]
+          );
+
+        if (minutes === null) {
+          continue;
+        }
+
+        var storedData = {
+          minutes: minutes,
+          rawValue:
+            String(result[1]).trim(),
+          date: date
+        };
+
+        var serialized =
+          JSON.stringify(
+            storedData
+          );
+
+        var previousStored =
+          sessionStorage.getItem(
+            info.key
+          );
+
+        sessionStorage.setItem(
+          info.key,
+          serialized
+        );
+
+        /*
+         * Petit feedback uniquement lorsque
+         * cette donnée vient réellement
+         * d'être chargée.
+         */
+        if (
+          notify &&
+          previousStored !== serialized
+        ) {
+
+          showBalanceLoadedToast(
+            date,
+            minutes
+          );
+        }
+
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+
+  /*
+   * IMPORTANT :
+   *
+   * Cette capture doit tourner même lorsque
+   * le widget n'est pas créé.
+   *
+   * Sur la semaine précédente il n'existe
+   * aucun pointage portant la date du jour,
+   * donc initialiseWidget() ne sera jamais
+   * appelé.
+   */
+  if (
+    new Date().getDay() === 1
+  ) {
+
+    setTimeout(
+      function() {
+        capturePreviousWeekBalance(
+          true
+        );
+      },
+      250
+    );
+  }
+
+
   function getPreviousDayBalance() {
 
+    /*
+     * PRIORITÉ 1 :
+     * vraie donnée directement disponible.
+     */
     var automaticBalance =
       readPreviousDayBalance();
 
-    // L'automatique est toujours prioritaire.
     if (automaticBalance !== null) {
+
+      automaticBalance.source =
+        'chrono';
+
       return automaticBalance;
     }
 
-    // Récupération de la saisie du jour.
-    if (manualPreviousBalance === null) {
+
+    /*
+     * PRIORITÉ 2 :
+     * cumul réel de la semaine précédente
+     * mémorisé en session.
+     */
+    if (
+      new Date().getDay() === 1
+    ) {
+
+      capturePreviousWeekBalance();
+
+      var storedBalance =
+        readStoredPreviousWeekBalance();
+
+      if (storedBalance !== null) {
+        return storedBalance;
+      }
+    }
+
+
+    /*
+     * PRIORITÉ 3 :
+     * fallback manuel.
+     */
+    if (
+      manualPreviousBalance === null
+    ) {
 
       var saved =
         localStorage.getItem(
@@ -647,20 +1073,75 @@
         );
 
       if (saved !== null) {
+
         manualPreviousBalance =
           Number(saved);
       }
     }
 
-    if (manualPreviousBalance !== null) {
+    if (
+      manualPreviousBalance !== null
+    ) {
+
       return {
-        minutes: manualPreviousBalance,
-        rawValue: 'manuel'
+        minutes:
+          manualPreviousBalance,
+
+        rawValue:
+          'manuel',
+
+        source:
+          'manual'
       };
     }
 
     return null;
   }
+
+
+  function getPreviousWeekWarning() {
+
+    /*
+     * Le trou inter-semaines nous concerne
+     * uniquement le lundi.
+     */
+    if (
+      new Date().getDay() !== 1
+    ) {
+      return null;
+    }
+
+    if (
+      readPreviousDayBalance() !== null
+    ) {
+      return null;
+    }
+
+    /*
+     * Si on est actuellement sur la bonne
+     * semaine, on tente de la capturer.
+     */
+    capturePreviousWeekBalance();
+
+    if (
+      readStoredPreviousWeekBalance() !== null
+    ) {
+      return null;
+    }
+
+    var info =
+      getPreviousWeekInfo();
+
+    return (
+      '⚠ Cumul précédent non chargé — ' +
+      'affiche la semaine du ' +
+      formatDateDisplay(info.monday) +
+      ' au ' +
+      formatDateDisplay(info.sunday) +
+      '.'
+    );
+  }
+
 
   function getTodayKey() {
 
@@ -1014,14 +1495,43 @@
              * FENÊTRE
              * ================================================== */
 
+            /*
+             * LISIBILITÉ SUR LE FOND ILLUSTRÉ
+             */
+
+            #three-worktime-widget label,
+            #three-worktime-widget .three-result-label,
+            #three-worktime-widget #three-status,
+            #three-worktime-widget #three-estimated-balance,
+            #three-worktime-widget #three-countdown-label,
+            #three-worktime-widget #three-countdown-target,
+            #three-worktime-widget #three-slider-min,
+            #three-worktime-widget #three-slider-max {
+                font-weight: 600;
+
+                text-shadow:
+                    -1px -1px 2px rgba(255,255,255,.95),
+                     1px -1px 2px rgba(255,255,255,.95),
+                    -1px  1px 2px rgba(255,255,255,.95),
+                     1px  1px 2px rgba(255,255,255,.95);
+            }
+
+            #three-worktime-widget .three-result-value,
+            #three-worktime-widget #three-departure-time,
+            #three-worktime-widget #three-countdown {
+                text-shadow:
+                    0 1px 2px rgba(255,255,255,.95);
+            }
+
+
             #three-worktime-widget {
 
                 position: fixed;
 
-                top: 80px;
+                top: 50px;
                 right: 30px;
 
-                width: 310px;
+                width: 390px;
 
                 z-index: 2147483647;
 
@@ -1037,7 +1547,7 @@
                     1px solid
                     rgba(40,70,90,.65);
 
-                border-radius: 8px;
+                border-radius: 12px;
 
                 box-shadow:
                     0 5px 20px
@@ -1050,6 +1560,34 @@
                 font-size: 14px;
 
                 overflow: hidden;
+            }
+
+
+
+            #three-previous-week-warning {
+                margin: 10px 12px 0;
+                padding: 8px 10px;
+
+                border:
+                    1px solid
+                    rgba(212,107,0,.45);
+
+                border-radius: 9px;
+
+                background:
+                    rgba(255,245,225,.94);
+
+                color: #8a4b00;
+
+                font-size: 11px;
+                font-weight: 600;
+                line-height: 1.35;
+
+                text-align: center;
+
+                box-shadow:
+                    0 1px 3px
+                    rgba(0,0,0,.08);
             }
 
 
@@ -1104,7 +1642,7 @@
 
             #three-worktime-body {
 
-                padding: 14px;
+                padding: 16px 18px 14px;
 
                 background: transparent;
             }
@@ -1116,9 +1654,9 @@
 
             #three-auto-info {
 
-                margin-bottom: 12px;
+                margin-bottom: 14px;
 
-                padding: 6px 8px;
+                padding: 8px 10px;
 
                 background:
                     rgba(
@@ -1238,7 +1776,7 @@
 
                 box-sizing: border-box;
 
-                padding: 6px;
+                padding: 7px 9px;
 
                 background:
                     rgba(
@@ -1257,7 +1795,7 @@
                         .65
                     );
 
-                border-radius: 3px;
+                border-radius: 8px;
 
                 color: #111;
             }
@@ -1304,7 +1842,7 @@
 
                 position: relative;
 
-                padding-top: 32px;
+                padding-top: 36px;
             }
 
 
@@ -1519,14 +2057,14 @@
             #three-buttons button {
                 flex: 1;
 
-                height: 30px;
-                padding: 0 12px;
+                height: 34px;
+                padding: 0 14px;
 
                 border:
                     1px solid
                     rgba(30, 80, 120, .35);
 
-                border-radius: 15px;
+                border-radius: 17px;
 
                 background:
                     rgba(255, 255, 255, .78);
@@ -1588,9 +2126,9 @@
                         .30
                     );
 
-                margin-top: 14px;
+                margin-top: 18px;
 
-                padding-top: 12px;
+                padding-top: 15px;
             }
 
 
@@ -1649,7 +2187,7 @@
 
 
             #three-estimated-balance {
-                margin-top: 8px;
+                margin-top: 12px;
                 text-align: center;
                 font-size: 11px;
                 font-weight: 500;
@@ -1680,9 +2218,9 @@
                         .30
                     );
 
-                margin-top: 12px;
+                margin-top: 16px;
 
-                padding-top: 10px;
+                padding-top: 13px;
 
                 text-align: center;
             }
@@ -1853,9 +2391,9 @@
 
                 position: relative;
 
-                height: 67px;
+                height: 100px;
 
-                margin-top: 7px;
+                margin-top: 12px;
 
                 border-top:
                     1px solid
@@ -1869,11 +2407,11 @@
 
                 position: absolute;
 
-                left: -4px;
-                bottom: 8;
+                left: -5px;
+                bottom: 8px;
 
-                width: 67px;
-                height: 62px;
+                width: 106px;
+                height: 98px;
 
                 object-fit: contain;
 
@@ -1887,11 +2425,11 @@
 
                 position: absolute;
 
-                right: -3px;
-                bottom: 8;
+                right: -4px;
+                bottom: 8px;
 
-                width: 63px;
-                height: 62px;
+                width: 101px;
+                height: 98px;
 
                 object-fit: contain;
 
@@ -1905,10 +2443,10 @@
 
                 position: absolute;
 
-                left: 49px;
-                right: 49px;
+                left: 78px;
+                right: 78px;
 
-                bottom: 11px;
+                bottom: 14px;
 
                 height: 3px;
 
@@ -1936,15 +2474,392 @@
             }
 
 
-            #three-journey-walker {
+
+             /* POLISH UI */
+
+             /* Textes secondaires : halo plus discret */
+             #three-worktime-widget label,
+             #three-worktime-widget .three-result-label,
+             #three-worktime-widget #three-status,
+             #three-worktime-widget #three-estimated-balance,
+             #three-worktime-widget #three-countdown-label,
+             #three-worktime-widget #three-countdown-target,
+             #three-worktime-widget #three-departure-line > span:first-child {
+                 text-shadow:
+                     0 1px 2px rgba(255,255,255,.95),
+                     0 0 3px rgba(255,255,255,.65);
+             }
+
+             /* Champs : style commun */
+             #three-worktime-widget .three-worktime-field input,
+             #three-worktime-widget #three-manual-balance-input {
+                 box-sizing: border-box;
+                 border: 1px solid rgba(70,90,110,.42);
+                 border-radius: 9px;
+                 background: rgba(255,255,255,.82);
+                 box-shadow:
+                     inset 0 1px 1px rgba(255,255,255,.75),
+                     0 1px 3px rgba(0,0,0,.08);
+                 color: #18222b;
+                 transition:
+                     background .15s,
+                     border-color .15s,
+                     box-shadow .15s;
+             }
+
+             #three-worktime-widget .three-worktime-field input:hover,
+             #three-worktime-widget #three-manual-balance-input:hover {
+                 background: rgba(255,255,255,.92);
+             }
+
+             #three-worktime-widget .three-worktime-field input:focus,
+             #three-worktime-widget #three-manual-balance-input:focus {
+                 outline: none;
+                 background: rgba(255,255,255,.96);
+                 border-color: rgba(3,118,245,.70);
+                 box-shadow:
+                     0 0 0 2px rgba(3,118,245,.12);
+             }
+
+             /* Cumul estimé */
+             #three-estimated-balance {
+                 display: flex;
+                 justify-content: center;
+                 align-items: center;
+                 gap: 6px;
+                 min-height: 30px;
+             }
+
+             #three-manual-balance-zone {
+                 display: inline-flex;
+                 align-items: center;
+                 gap: 5px;
+                 margin-left: 2px;
+             }
+
+             #three-manual-balance-input {
+                 width: 82px;
+                 height: 29px;
+                 padding: 5px 7px;
+                 font-size: 11px;
+                 text-align: center;
+             }
+
+             /* Bouton ✓ cohérent avec les autres contrôles */
+             #three-manual-balance-save {
+                 width: 29px;
+                 height: 29px;
+                 padding: 0;
+
+                 display: inline-flex;
+                 align-items: center;
+                 justify-content: center;
+
+                 border: 1px solid rgba(30,80,120,.35);
+                 border-radius: 9px;
+
+                 background: rgba(255,255,255,.82);
+                 color: #159447;
+
+                 font-size: 14px;
+                 font-weight: bold;
+
+                 box-shadow:
+                     0 1px 3px rgba(0,0,0,.10),
+                     inset 0 1px 0 rgba(255,255,255,.8);
+
+                 cursor: pointer;
+
+                 transition:
+                     background .15s,
+                     transform .08s,
+                     box-shadow .15s;
+             }
+
+             #three-manual-balance-save:hover {
+                 background: rgba(255,255,255,.97);
+                 box-shadow:
+                     0 2px 5px rgba(0,0,0,.14),
+                     inset 0 1px 0 white;
+             }
+
+             #three-manual-balance-save:active {
+                 transform: translateY(1px);
+             }
+
+
+
+             /* SLIDER POLISH */
+
+             #three-departure-slider {
+                 width: 100%;
+                 height: 6px;
+                 margin: 0;
+
+                 appearance: none;
+                 -webkit-appearance: none;
+
+                 border-radius: 99px;
+
+                 background: rgba(255,255,255,.58);
+
+                 box-shadow:
+                     inset 0 1px 3px rgba(0,0,0,.18),
+                     0 1px 2px rgba(255,255,255,.55);
+
+                 cursor: pointer;
+             }
+
+             /* Firefox */
+             #three-departure-slider::-moz-range-track {
+                 height: 6px;
+                 border: 0;
+                 border-radius: 99px;
+
+                 background: rgba(255,255,255,.58);
+
+                 box-shadow:
+                     inset 0 1px 3px rgba(0,0,0,.18);
+             }
+
+             #three-departure-slider::-moz-range-progress {
+                 height: 6px;
+                 border-radius: 99px;
+
+                 background: rgba(3,118,245,.82);
+             }
+
+             #three-departure-slider::-moz-range-thumb {
+                 width: 18px;
+                 height: 18px;
+
+                 border: 2px solid rgba(255,255,255,.95);
+                 border-radius: 50%;
+
+                 background: #0875d1;
+
+                 box-shadow:
+                     0 1px 4px rgba(0,0,0,.35);
+
+                 cursor: grab;
+             }
+
+             #three-departure-slider::-moz-range-thumb:hover {
+                 transform: scale(1.12);
+             }
+
+             #three-departure-slider::-moz-range-thumb:active {
+                 cursor: grabbing;
+             }
+
+             /* Chromium / WebKit */
+             #three-departure-slider::-webkit-slider-runnable-track {
+                 height: 6px;
+                 border-radius: 99px;
+
+                 background: rgba(255,255,255,.58);
+             }
+
+             #three-departure-slider::-webkit-slider-thumb {
+                 appearance: none;
+                 -webkit-appearance: none;
+
+                 width: 18px;
+                 height: 18px;
+
+                 margin-top: -6px;
+
+                 border: 2px solid rgba(255,255,255,.95);
+                 border-radius: 50%;
+
+                 background: #0875d1;
+
+                 box-shadow:
+                     0 1px 4px rgba(0,0,0,.35);
+
+                 cursor: grab;
+             }
+
+             #three-departure-slider::-webkit-slider-thumb:hover {
+                 transform: scale(1.12);
+             }
+
+             #three-departure-slider::-webkit-slider-thumb:active {
+                 cursor: grabbing;
+             }
+
+
+
+             /* FINAL UI POLISH */
+
+             /*
+              * Textes :
+              * on garde juste assez de halo pour rester lisible
+              * sur les zones claires du paysage.
+              */
+             #three-worktime-widget label,
+             #three-worktime-widget .three-result-label,
+             #three-worktime-widget #three-status,
+             #three-worktime-widget #three-estimated-balance,
+             #three-worktime-widget #three-countdown-label,
+             #three-worktime-widget #three-countdown-target,
+             #three-worktime-widget #three-slider-labels,
+             #three-worktime-widget #three-departure-line > span:first-child,
+             #three-worktime-widget #three-goal-marker,
+             #three-worktime-widget #three-legal-marker::before,
+             #three-worktime-widget #three-latest-marker::before,
+             #three-worktime-widget #three-balance-marker::before {
+                 text-shadow:
+                     0 1px 1px rgba(255,255,255,.90),
+                     0 0 2px rgba(255,255,255,.55);
+             }
+
+
+             /*
+              * Grosses valeurs :
+              * ombre plus nette, moins "halo blanc".
+              */
+             #three-worktime-widget #three-departure-time,
+             #three-worktime-widget #three-afternoon,
+             #three-worktime-widget #three-total,
+             #three-worktime-widget #three-countdown {
+                 text-shadow:
+                     0 1px 2px rgba(255,255,255,.82),
+                     0 0 3px rgba(255,255,255,.40);
+             }
+
+
+             /*
+              * Bouton affichage du compte à rebours.
+              * Même famille visuelle que le bouton ✓.
+              */
+             #three-countdown-toggle {
+                 min-width: 29px;
+                 width: 29px;
+                 height: 29px;
+
+                 padding: 0;
+
+                 display: inline-flex;
+                 align-items: center;
+                 justify-content: center;
+
+                 top: -5px;
+
+                 border:
+                     1px solid
+                     rgba(30,80,120,.35);
+
+                 border-radius: 9px;
+
+                 background:
+                     rgba(255,255,255,.82);
+
+                 color: #23445f;
+
+                 font-size: 12px;
+                 line-height: normal;
+
+                 box-shadow:
+                     0 1px 3px rgba(0,0,0,.10),
+                     inset 0 1px 0 rgba(255,255,255,.8);
+
+                 transition:
+                     background .15s,
+                     transform .08s,
+                     box-shadow .15s;
+             }
+
+
+             #three-countdown-toggle:hover {
+                 background:
+                     rgba(255,255,255,.97);
+
+                 box-shadow:
+                     0 2px 5px rgba(0,0,0,.14),
+                     inset 0 1px 0 white;
+             }
+
+
+             #three-countdown-toggle:active {
+                 transform:
+                     translateY(1px);
+             }
+
+
+
+             /* MARKER FIX */
+
+             /*
+              * Retour au halo clair pour les textes colorés.
+              */
+             #three-goal-marker,
+             #three-legal-marker::before,
+             #three-latest-marker::before,
+             #three-balance-marker::before,
+             #three-estimated-balance-value {
+                 text-shadow:
+                     0 1px 2px rgba(255,255,255,.95),
+                     0 0 4px rgba(255,255,255,.85);
+             }
+
+
+             /*
+              * Marqueur du cumul :
+              * le trait repart clairement du slider vers le bas.
+              */
+             #three-balance-marker {
+                 bottom: 9px;
+                 height: 14px;
+             }
+
+             #three-balance-marker::before {
+                 top: 16px;
+             }
+
+
+
+             /* MARKER SIDE FIX */
+
+             /*
+              * Limites rouges :
+              * petits traits uniquement AU-DESSUS du rail.
+              */
+             #three-legal-marker,
+             #three-latest-marker {
+                 bottom: 12px;
+                 height: 10px;
+             }
+
+             #three-legal-marker::before,
+             #three-latest-marker::before {
+                 bottom: 12px;
+             }
+
+
+             /*
+              * Départ selon le cumul :
+              * petit trait uniquement SOUS le rail.
+              */
+             #three-balance-marker {
+                 bottom: 0;
+                 height: 10px;
+             }
+
+             #three-balance-marker::before {
+                 top: 11px;
+             }
+
+
+#three-journey-walker {
 
                 position: absolute;
 
-                left: 49px;
-                bottom: 5px;
+                left: 65px;
+                bottom: -30px;
 
-                width: 31px;
-                height: 46px;
+                width: 86px;
+                height: 130px;
 
                 object-fit: contain;
 
@@ -2004,6 +2919,12 @@
 				</div>
 
 			</div>
+
+            <div
+                id="three-previous-week-warning"
+                style="display:none"
+            ></div>
+
 
 
             <div id="three-worktime-body">
@@ -2347,6 +3268,65 @@
     );
 
     // ========================================================
+    // POSITION INITIALE
+    // ========================================================
+
+    var weeklyTable = null;
+
+    var tables =
+      document.querySelectorAll('table');
+
+    for (
+      var tableIndex = 0;
+      tableIndex < tables.length;
+      tableIndex++
+    ) {
+
+      if (
+        tables[tableIndex]
+          .textContent
+          .indexOf('Entrées/Sorties') !== -1
+      ) {
+
+        weeklyTable =
+          tables[tableIndex];
+
+        break;
+      }
+    }
+
+    if (weeklyTable) {
+
+      var tableRect =
+        weeklyTable.getBoundingClientRect();
+
+      var desiredLeft =
+        tableRect.right + 30;
+
+      var availableRight =
+        window.innerWidth -
+        desiredLeft;
+
+      if (
+        availableRight >=
+        widget.offsetWidth
+      ) {
+
+        widget.style.left =
+          desiredLeft + 'px';
+
+        widget.style.right =
+          'auto';
+
+        widget.style.top =
+          Math.max(
+            10,
+            tableRect.top
+          ) + 'px';
+      }
+    }
+
+    // ========================================================
     // SKIN
     // ========================================================
 
@@ -2476,6 +3456,11 @@
       }
     );
 
+    var previousWeekWarning =
+      document.getElementById(
+        'three-previous-week-warning'
+      );
+
     var estimatedBalance =
       document.getElementById(
         'three-estimated-balance-value'
@@ -2502,7 +3487,13 @@
        * Si ChronoGestor possède finalement
        * une vraie valeur, on refuse la saisie.
        */
-      if (readPreviousDayBalance() !== null) {
+      if (
+        readPreviousDayBalance() !== null ||
+        (
+          new Date().getDay() === 1 &&
+          readStoredPreviousWeekBalance() !== null
+        )
+      ) {
         return;
       }
 
@@ -3083,15 +4074,44 @@
       var previousBalance =
         getPreviousDayBalance();
 
+      var storedPreviousWeekBalance =
+        new Date().getDay() === 1
+          ? readStoredPreviousWeekBalance()
+          : null;
+
+
       /*
-       * La saisie manuelle est disponible
-       * uniquement si ChronoGestor ne fournit
-       * aucun cumul pour la veille.
+       * Le manuel reste disponible tant que
+       * la vraie donnée n'a pas été chargée.
        */
       manualBalanceZone.style.display =
-        automaticBalance === null
+        (
+          automaticBalance === null &&
+          storedPreviousWeekBalance === null
+        )
           ? 'inline-flex'
           : 'none';
+
+
+      /*
+       * Bandeau d'aide du lundi.
+       */
+      var previousWeekMessage =
+        getPreviousWeekWarning();
+
+      if (previousWeekMessage) {
+
+        previousWeekWarning.textContent =
+          previousWeekMessage;
+
+        previousWeekWarning.style.display =
+          'block';
+
+      } else {
+
+        previousWeekWarning.style.display =
+          'none';
+      }
 
       if (previousBalance) {
 
@@ -3182,14 +4202,21 @@
           departureMinutes
         );
 
-      // Avant le départ
+
+      // ======================================================
+      // AVANT LE DÉPART
+      // ======================================================
+
       if (difference > 0) {
 
-        var seconds =
+        var totalSeconds =
           Math.ceil(
             difference /
             1000
           );
+
+        var seconds =
+          totalSeconds;
 
         var hours =
           Math.floor(
@@ -3209,6 +4236,7 @@
         seconds %=
           60;
 
+
         countdownLabel.textContent =
           'Temps restant';
 
@@ -3219,62 +4247,78 @@
           ':' +
           pad(seconds);
 
-      window.top.document.title =
-        '⏱ ' +
-        pad(hours) +
-        ':' +
-        pad(minutes) +
-        ':' +
-        pad(seconds) +
-        ' — Chronobetter';
+
+        // Plus de 10 minutes :
+        // comportement normal.
+        if (totalSeconds > 600) {
+
+          countdown.style.color =
+            '#111';
+
+          window.top.document.title =
+            '⏱ ' +
+            pad(hours) +
+            ':' +
+            pad(minutes) +
+            ':' +
+            pad(seconds) +
+            ' — Chronobetter';
+
+          return;
+        }
+
+
+        // 10 dernières minutes :
+        // petite alerte verte.
+        countdown.style.color =
+          '#159447';
+
+
+        // Dernière minute :
+        // titre encore plus explicite.
+        if (totalSeconds <= 60) {
+
+          window.top.document.title =
+            '🟢 Départ dans ' +
+            pad(minutes) +
+            ':' +
+            pad(seconds);
+
+          return;
+        }
+
+
+        window.top.document.title =
+          '🟢 ' +
+          pad(minutes) +
+          ':' +
+          pad(seconds) +
+          ' — Chronobetter';
 
         return;
       }
 
-      // Après le départ
-      var overtimeSeconds =
-        Math.floor(
-          Math.abs(
-            difference
-          ) /
-          1000
-        );
 
-      var overtimeHours =
-        Math.floor(
-          overtimeSeconds /
-          3600
-        );
+      // ======================================================
+      // OBJECTIF ATTEINT
+      // ======================================================
 
-      overtimeSeconds %=
-        3600;
-
-      var overtimeMinutes =
-        Math.floor(
-          overtimeSeconds /
-          60
-        );
-
-      overtimeSeconds %=
-        60;
+      countdown.style.color =
+        '#159447';
 
       countdownLabel.textContent =
-        'Temps en plus';
+        '🎉 C’EST BON !';
 
       countdown.textContent =
-        '+' +
-        pad(
-          overtimeHours
-        ) +
-        ':' +
-        pad(
-          overtimeMinutes
-        ) +
-        ':' +
-        pad(
-          overtimeSeconds
-        );
+        '00:00:00';
+
+      countdownTarget.textContent =
+        'Tu peux te barrer.';
+
+      window.top.document.title =
+        '🎉 Tu peux te barrer !';
     }
+
 
     // ========================================================
     // PROGRESSION BOULOT → MAISON
@@ -3364,11 +4408,11 @@
        * les deux bâtiments.
        */
       var start =
-        49;
+        78;
 
       var end =
         journey.clientWidth -
-        49;
+        78;
 
       var position =
         start +
